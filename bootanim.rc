@@ -1,0 +1,21 @@
+service bootanim /system/bin/bootanimation
+    class core
+    user graphics
+    group graphics audio
+    disabled
+    oneshot
+
+# MTK add
+service banim_shutmp3 /system/bin/bootanimation shut mp3
+    class core
+    user graphics
+    group graphics audio
+    disabled
+    oneshot
+
+service banim_shutnomp3 /system/bin/bootanimation shut nomp3
+    class core
+    user graphics
+    group graphics audio
+    disabled
+    oneshot
