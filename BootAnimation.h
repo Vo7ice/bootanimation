@@ -57,6 +57,7 @@ public:
                 BootAnimation(bool bSetBootOrShutDown,bool bSetPlayMP3,bool bSetRotated);
     virtual     ~BootAnimation();
     void        setBootVideoPlayState(int playState);
+    void        setBootVideo(bool bSetPlayMP4);
 
     sp<SurfaceComposerClient> session() const;
 
@@ -107,6 +108,7 @@ private:
     status_t initTexture(const Animation::Frame& frame);
     bool android();
     bool movie();
+	bool video(const char* videoResourcePath);
     void drawTime(const Texture& clockTex, const int yPos);
     Animation* loadAnimation(const String8&);
     bool playAnimation(const Animation&);
@@ -138,6 +140,7 @@ private:
     void initBootanimationZip();
     void initShutanimationZip();
     const char* initAudioPath();
+    const char* initVideoPath();
     bool ETC1movie();
     void initShader();
     GLuint buildShader(const char* source, GLenum shaderType);
@@ -146,6 +149,7 @@ private:
     bool bBootOrShutDown;
     bool bShutRotate;
     bool bPlayMP3;
+    bool bPlayMP4;
     GLuint mProgram;
     GLint mAttribPosition;
     GLint mAttribTexCoord;

@@ -56,6 +56,7 @@ int main(int argc, char** argv)
         bool setBoot = true;
         bool setRotated = false;
         bool sePaly = true;
+        bool sePlayMP4 = true;
         if(argc > 1){
            if(!strcmp(argv[1],"shut"))
                setBoot = false;
@@ -68,7 +69,7 @@ int main(int argc, char** argv)
             if(!strcmp(argv[3],"rotate"))
                setRotated = true;
         }
-        ALOGD("[BootAnimation %s %d]setBoot=%d,sePaly=%d,setRotated=%d",__FUNCTION__,__LINE__,setBoot,sePaly,setRotated);
+        ALOGD("[BootAnimation %s %d]setBoot=%d,sePaly=%d,sePlayMP4=%d,setRotated=%d",__FUNCTION__,__LINE__,setBoot,sePaly,sePlayMP4,setRotated);
         char volume[PROPERTY_VALUE_MAX];
         property_get("persist.sys.mute.state", volume, "-1");
         int nVolume = -1;
@@ -76,10 +77,12 @@ int main(int argc, char** argv)
         ALOGD("[BootAnimation %s %d]nVolume=%d",__FUNCTION__,__LINE__,nVolume);
         if(nVolume == 0 || nVolume == 1 ){
             sePaly = false;
+            sePlayMP4 = false;
         }
         ALOGD("before new BootAnimation...");
         ALOGD("[BootAnimation %s %d]before new BootAnimation...",__FUNCTION__,__LINE__);
         sp<BootAnimation> boot = new BootAnimation(setBoot,sePaly,setRotated);
+        boot->setBootVideo(sePlayMP4);
         ALOGD("joinThreadPool...");
         ALOGD("[BootAnimation %s %d]before joinThreadPool...",__FUNCTION__,__LINE__);
         IPCThreadState::self()->joinThreadPool();

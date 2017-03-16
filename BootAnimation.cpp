@@ -95,6 +95,13 @@ static const char* mAudioResource_gb[2] =
 {"/bootaudio.mp3", /*  bootaudio path  */
  "/shutaudio.mp3"/*  shutaudio path  */
 };
+
+static const char* mVideoResource_gb[2] = 
+{
+ "/bootvideo.mp4", /* bootvideo path */
+ "/shutvideo.mp4"  /* shutvideo path */
+};
+
 char mBootaudioFileName[PROPERTY_VALUE_MAX];
 #else
 #define REGIONAL_BOOTANIM_FILE_NAME "persist.bootanim.logopath"
@@ -125,6 +132,12 @@ static const char* mResourcePath[MNC_COUNT][PATH_COUNT] =
      {"/system/media/shutaudio.mp3", "/custom/media/shutaudio.mp3", "/data/local/shutaudio.mp3"} /*  shutaudio path  */
     };
 #endif
+
+static const char* mVideoPath[2][PATH_COUNT] = 
+{
+	{"/system/media/bootvideo.mp4", "/custom/media/bootvideo.mp4", "/data/local/bootvideo.mp4"}, /* bootvideo path */
+	{"/system/media/shutvideo.mp4", "/custom/media/shutvideo.mp4", "/data/local/shutvideo.mp4"} /*  shutvideo path  */
+};
 
 #define CUSTOM_BOOTANIMATION_FILE "/custom/media/bootanimation.zip"
 #define USER_BOOTANIMATION_FILE   "/data/local/bootanimation.zip"
@@ -205,6 +218,10 @@ void BootAnimation::setBootVideoPlayState(int playState){
     ALOGD("[BootAnimation %s %d]mBootVideoPlayState=%d",__FUNCTION__,__LINE__, mBootVideoPlayState);
 }
 
+void BootAnimation::setBootVideo(bool bSetPlayMP4){
+    bPlayMP4 = bSetPlayMP4;
+    ALOGD("[BootAnimation %s %d]bPlayMP4=%d",__FUNCTION__,__LINE__, bSetPlayMP4);
+}
 
 void BootAnimation::onFirstRef() {
     status_t err = mSession->linkToComposerDeath(this);
@@ -494,18 +511,31 @@ bool BootAnimation::threadLoop()
     // We have no bootanimation file, so we use the stock android logo
     // animation.
     sp<MediaPlayer> mediaplayer;
-    const char* resourcePath = initAudioPath();
+    const char* audioResourcePath = initAudioPath();
+    const char* videoResourcePath = initVideoPath();
     status_t mediastatus = NO_ERROR;
-    if (resourcePath != NULL) {
+    if (audioResourcePath != NULL) {
         bPlayMP3 = true;
-        ALOGD("sound file path: %s", resourcePath);
-        mediaplayer = new MediaPlayer();
-        mediastatus = mediaplayer->setDataSource(NULL, resourcePath, NULL);
+        ALOGD("sound file path: %s", audioResourcePath);
+    }else{
+        bPlayMP3 = false;
+    }
+
+    if (videoResourcePath != NULL) {
+        bPlayMP3 = false;
+        bPlayMP4 = true;
+        ALOGD("video file path: %s", videoResourcePath);
+    } else {
+        bPlayMP4 = false;
+    }
+	
+	if (bPlayMP3) {
+	    mediaplayer = new MediaPlayer();
+        mediastatus = mediaplayer->setDataSource(NULL, audioResourcePath, NULL);
 
         sp<BootVideoListener> listener = new BootVideoListener(this);
         mediaplayer->setListener(listener);
-
-        if (mediastatus == NO_ERROR) {
+		if (mediastatus == NO_ERROR) {
             ALOGD("mediaplayer is initialized");
             Parcel* attributes = new Parcel();
             attributes->writeInt32(AUDIO_USAGE_MEDIA);            //usage
@@ -522,24 +552,26 @@ bool BootAnimation::threadLoop()
             ALOGD("media player is prepared");
             mediastatus = mediaplayer->start();
         }
-
-    }else{
-        bPlayMP3 = false;
-    }
-
+	}
+	
     if ((mZip == NULL)&&(mZipFileName.isEmpty())) {
         r = android();
     } else {
-        if (!bETC1Movie) {
-            ALOGD("threadLoop() movie()");
-            r = movie();
-        } else {
-            ALOGD("threadLoop() ETC1movie()");
-            r = ETC1movie();
+        if (bPlayMP4) {
+			ALOGD("threadLoop() video()");
+            r = video(videoResourcePath);
+        }else {
+            if (!bETC1Movie) {
+                ALOGD("threadLoop() movie()");
+                r = movie();
+            } else {
+                ALOGD("threadLoop() ETC1movie()");
+                r = ETC1movie();
+            }
         }
     }
 
-    if (resourcePath != NULL) {
+    if (audioResourcePath != NULL && bPlayMP3) {
         if (mediastatus == NO_ERROR) {
             ALOGD("mediaplayer was stareted successfully, now it is going to be stoped");
             mediaplayer->stop();
@@ -905,6 +937,66 @@ bool BootAnimation::preloadZip(Animation& animation)
     return true;
 }
 
+bool BootAnimation::video(const char* videoResourcePath)
+{
+    if (videoResourcePath == NULL)
+    {
+        ALOGD("Don`t have video path!");
+        return false;
+    }
+    status_t mediastatus = NO_ERROR;
+	const float MAX_FPS = 60.0f;  
+    const float CHECK_DELAY = ns2us(s2ns(1) / MAX_FPS);  
+	
+	eglMakeCurrent(mDisplay, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);  
+    eglDestroySurface(mDisplay, mSurface);
+
+    sp<MediaPlayer> mediaplayer = new MediaPlayer();
+    mediaplayer->reset();
+    mediastatus = mediaplayer->setDataSource(NULL, videoResourcePath, NULL);
+
+    sp<BootVideoListener> listener = new BootVideoListener(this);
+    mediaplayer->setListener(listener);
+
+    if (mediastatus == NO_ERROR) {
+        ALOGD("mediaplayer is initialized");
+        Parcel* attributes = new Parcel();
+        attributes->writeInt32(AUDIO_USAGE_MEDIA);            //usage
+        attributes->writeInt32(AUDIO_CONTENT_TYPE_MUSIC);     //audio_content_type_t
+        attributes->writeInt32(AUDIO_SOURCE_DEFAULT);         //audio_source_t
+        attributes->writeInt32(0);                            //audio_flags_mask_t
+        attributes->writeInt32(1);                            //kAudioAttributesMarshallTagFlattenTags of mediaplayerservice.cpp
+        attributes->writeString16(String16("BootAnimationAudioTrack")); // tags
+        mediaplayer->setParameter(100, *attributes);
+        mediaplayer->setAudioStreamType(AUDIO_STREAM_MUSIC);
+        mediaplayer->setVideoSurfaceTexture(mFlingerSurface->getIGraphicBufferProducer()); 
+        mediastatus = mediaplayer->prepare();
+    }
+    if (mediastatus == NO_ERROR) {
+        ALOGD("media player is prepared");
+        mediastatus = mediaplayer->start();
+    }
+# if 1
+    while(true) {
+        if (exitPending()) {
+            if (mBootVideoPlayState == MEDIA_PLAYBACK_COMPLETE || mBootVideoPlayState == MEDIA_ERROR)
+            {
+                break;
+            }
+        }
+        usleep(CHECK_DELAY);
+        checkExit();
+    }
+# endif
+    if (mediastatus == NO_ERROR) {
+        ALOGD("mediaplayer was stareted successfully, now it is going to be stoped");
+        mediaplayer->stop();
+        mediaplayer->disconnect();
+        mediaplayer.clear();
+    }
+    return false;
+}
+
 bool BootAnimation::movie()
 {
 
@@ -1099,6 +1191,28 @@ BootAnimation::Animation* BootAnimation::loadAnimation(const String8& fn)
     return animation;
 }
 // ---------------------------------------------------------------------------
+const char* BootAnimation::initVideoPath() {
+    if (!bPlayMP4)
+    {
+        ALOGD("initVideoPath:DON`T PLAY VIDEO!");
+        return NULL;
+    }
+
+    int index = 0;
+    if (bBootOrShutDown)
+    {
+        index = 0;
+    } else {
+        index = 1;
+    }
+    for (int i = 0; i < PATH_COUNT; i++) {
+        if (access(mVideoPath[index][i], F_OK) == 0) {
+            ALOGD("initVideoPath: video path = %s", mVideoPath[index][i]);
+            return mVideoPath[index][i];
+        }
+    }
+    return NULL;
+}
 
 const char* BootAnimation::initAudioPath() {
     if (!bPlayMP3) {
